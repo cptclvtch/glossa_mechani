@@ -31,8 +31,9 @@ The API is currently compatible with the following OSs:
 - iOS
 - Linux
 - Android
-- Xbox
 
 And the following compilers:
 - tcc
+- gcc
 - clang
+- msvc

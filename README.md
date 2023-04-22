@@ -1,5 +1,5 @@
 
-![Logo](https://raw.githubusercontent.com/cptclvtch/glossa_mechani/v0.1.b/.publication/website/logo.jpg)
+![Logo](https://github.com/cptclvtch/glossa_mechani/blob/dev/.publication/website/logo.jpg)
 
 # Glossa Mechani ( aka Gamma Mu ) ...
 ... is an interpreted programming language whose main feature is runtime modifiable code.
