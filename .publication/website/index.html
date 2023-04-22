@@ -1,0 +1,345 @@
+<html lang="en">
+  <head>
+    <title>Glossa Mechani</title>
+    <meta charset="utf-8">
+  </head>
+
+  <style>
+     body {
+       margin: 0;
+     }
+     canvas {
+       display: block;  /* prevents scrollbar */
+       width: 100vw;
+       height: 100vh;
+       z-index: -1;
+     }
+  </style>
+
+  <body>
+    <canvas id="glCanvas"></canvas>
+    <div id="ui" style="color: #FFFFFF;
+                        text-shadow:
+                        -1px -1px 0 #000,
+                        -1px  1px 0 #000,
+                         1px -1px 0 #000,
+                         1px  1px 0 #000;">
+
+      <div id="title_card"
+           style=" position:fixed;
+                   right:50;
+                   bottom:20;">
+        Glossa Mechani
+      </div>
+      <h2 style=" position:fixed;
+                  left: 50;
+                  top: 50;
+                  font-family:verdana;
+                  font-size:30px;">
+        Glossa Mechani
+      </h2>
+    </div>
+  </body>
+
+  <script>
+  var gl = document.querySelector('#glcanvas').getContext('webgl');
+
+  if(!gl)
+  {
+    alert('Unable to initialize webgl. Your browser or machine may not support it.');
+    exit;
+  }
+
+  var shader_program = init_shader_program();
+
+  var buffers = init_buffer();
+
+  gl_setup();
+
+  var screen_mode = 1; // 0 - mobile. 1 - desktop
+  var aspect_ratio = 1;
+
+  //animation system
+  // 0 - no-looping
+  // 1 - oscilating
+  // 2 -
+  var anim_variables = [];
+
+  var zig_zag = add_animation({start: -1, finish: 1, speed: 0.5 , type: 1});
+  resume_animation(zig_zag);
+
+  var then = 0;
+  requestAnimationFrame(draw_scene);
+
+
+
+
+function init_buffer()
+{
+  const positionBuffer = gl.createBuffer();
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+
+  const width = 1;
+  const slope = 1.875/1.125;
+  var   x = width;
+  const y = width * slope;
+  const height_ratio = 4.25/2;
+  const thickness = x * 0.1;
+  const green_line_scale = 3 * thickness;
+  const letter_spacing = green_line_scale;
+
+  const positions =
+  [
+    // gamma
+     0, 0, 0,
+     thickness, 0, 0,
+     x, y, 0,
+     x + thickness/2, y - slope*thickness/2, 0,
+     x + thickness, y, 0,
+     2*x, 0, 0,
+     2*x + thickness, 0, 0,
+
+    //connective quad
+     2*x + thickness*2, 0, 1,
+     2*x + thickness*2 + green_line_scale, 0, 1,
+    
+    //gamma green
+     x + thickness*2, y, 1,
+     x + thickness*2 + green_line_scale, y, 1,
+    
+    //connective quad
+    x = 2*x + thickness*2 + green_line_scale + letter_spacing, y, 0,
+    x, y, 0,
+    x, y*(1 - height_ratio), 0,
+    x + thickness, y*(1 - height_ratio), 0,
+
+    //mu
+     x, y, 0,
+     x + thickness, y - slope*thickness, 0,
+     x + thickness, y, 0,
+     x + width, 0, 0,
+     x + width + thickness/2, thickness/2 * slope, 0,
+     x + width + thickness, 0 , 0,
+     x + width*2, y, 0,
+     x + width*2 + thickness/2, y - thickness/2*slope, 0,
+     x + width*2 + thickness, y, 0,
+     x + width*3, 0, 0,
+     x + width*3 + thickness, 0, 0,
+
+    //connective quad
+     x + width*3 + thickness*2, 0, 1,
+     x + width*3 + thickness*2 + green_line_scale, 0, 1,
+    
+    //mu green
+     x + width*2 + thickness*2, y, 1,
+     x + width*2 + thickness*2 + green_line_scale, y, 1,
+
+
+    //connective quad
+     x + width*2 + thickness*2 + green_line_scale, y, 1,
+     x + width + thickness/2, slope*thickness*3/2, 1,
+     x + width + thickness/2, slope*thickness*3/2, 1,
+     x + width + thickness/2 + green_line_scale/2, slope*(thickness*3/2 + green_line_scale/2), 1,
+    
+    //mu green
+     x + thickness*2, y, 1,
+     x + thickness*2 + green_line_scale, y, 1,
+  ];
+
+  gl.bufferData(gl.ARRAY_BUFFER,
+                new Float32Array(positions),
+                gl.STATIC_DRAW);
+
+  return {position: positionBuffer, count: positions.length/3};
+}
+
+function gl_setup()
+{
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LEQUAL);
+
+  {
+    var v_position = gl.getAttribLocation(shader_program, 'v');
+
+    gl.vertexAttribPointer(v_position, 3, gl.FLOAT, false, 0,0);
+    gl.enableVertexAttribArray(v_position);
+  }
+
+  gl.useProgram(shader_program);
+}
+
+function draw_scene(now)
+{
+  now *= 0.001;
+  var dT = now - then;
+  then = now;
+
+  boilerplate_updates(dT);
+
+  gl.clearDepth(1.0);                 // Clear everything
+
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
+
+  gl.uniform1f(gl.getUniformLocation(shader_program, 'aspect_ratio'), aspect_ratio);
+
+  gl.uniform2f(gl.getUniformLocation(shader_program, 'scale'), 0.125,0.125);
+  gl.uniform2f(gl.getUniformLocation(shader_program, 'offset'), /*anim_value(zig_zag)*/ 0,0);
+
+  {
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, buffers.count);
+  }
+
+  requestAnimationFrame(draw_scene);
+}
+
+function resize_canvas_to_display_size()
+{
+  gl.canvas.width = gl.canvas.clientWidth;
+  gl.canvas.height = gl.canvas.clientHeight;
+
+  aspect_ratio = gl.canvas.width/gl.canvas.height;
+  gl.viewport(0,0, gl.canvas.width, gl.canvas.height);
+
+  screen_mode = aspect_ratio > 1.5;
+}
+
+function boilerplate_updates(dT)
+{
+  resize_canvas_to_display_size();
+
+  step_animations(dT);
+}
+
+function add_animation(input)
+{
+  if(input.start != input.finish)
+    return -1 + anim_variables.push({ value:  input.start,
+                                      start:  input.start,
+                                      finish: input.finish,
+                                      type:   input.type,
+                                      speed:  input.speed,
+                                      paused: true,});
+}
+
+function pause_animation(i)
+{
+  anim_variables[i].paused = true;
+}
+
+function resume_animation(i)
+{
+  anim_variables[i].paused = false;
+}
+
+function anim_value(i)
+{
+  return anim_variables[i].value;
+}
+
+function step_animations(dT)
+{
+  for(let variable of anim_variables)
+  {
+    if(!variable.paused)
+      var direction = 2*(variable.start < variable.finish) - 1;
+      variable.value += direction * variable.speed * dT;
+      if(2*(variable.value < variable.finish) - 1 != direction)
+        variable.value = variable.finish;
+
+      switch(variable.type)
+      {
+        case 0: //no-looping
+        if(variable.value == variable.finish) variable.paused = true;
+        break;
+
+        case 1: //oscilating
+        if(variable.value == variable.finish)
+        {
+          var temp = variable.start;
+          variable.start = variable.finish;
+          variable.finish = temp;
+        }
+        break;
+      }
+  }
+}
+
+function init_shader_program()
+{
+  // Vertex shader program
+
+  const vsSource =
+  `
+    attribute vec4 v;
+
+    uniform float aspect_ratio;
+    uniform vec2 scale;
+    uniform vec2 offset;
+
+    varying vec4 color;
+
+    void main()
+    {
+      gl_Position = vec4(v.xy * vec2(1,aspect_ratio)* scale + offset, v.zw);
+
+      if(v.z == 0.0)
+        color = vec4(1.0, 1.0, 1.0, 1.0);
+      if(v.z == 1.0)
+        color = vec4(0.2, 1.0, 0.2, 1.0);
+    }
+  `;
+
+  // Fragment shader program
+
+  const fsSource =
+  `
+    precision mediump float;
+
+    varying vec4 color;
+
+    void main()
+    {
+      gl_FragColor = color;
+    }
+  `;
+
+  const vertexShader = load_shader(gl.VERTEX_SHADER, vsSource);
+  const fragmentShader = load_shader(gl.FRAGMENT_SHADER, fsSource);
+
+  const shader_program = gl.createProgram();
+  gl.attachShader(shader_program, vertexShader);
+  gl.attachShader(shader_program, fragmentShader);
+  gl.linkProgram(shader_program);
+
+  if (!gl.getProgramParameter(shader_program, gl.LINK_STATUS))
+  {
+    alert('Unable to initialize the shader program: ' + gl.getProgramInfoLog(shader_program));
+    return null;
+  }
+
+  return shader_program;
+}
+
+function load_shader(type, source)
+{
+  const shader = gl.createShader(type);
+
+  gl.shaderSource(shader, source);
+
+  gl.compileShader(shader);
+
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
+  {
+    alert('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(shader));
+    gl.deleteShader(shader);
+    return null;
+  }
+
+  return shader;
+}
+  </script>
+</html>
